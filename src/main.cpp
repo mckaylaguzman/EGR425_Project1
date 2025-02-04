@@ -9,11 +9,11 @@
 ////////////////////////////////////////////////////////////////////
 // TODO 3: Register for openweather account and get API key
 String urlOpenWeather = "https://api.openweathermap.org/data/2.5/weather?";
-String apiKey = "YOUR_API_KEY";
+String apiKey = "e969174f41509785bfde66d63dee09ae";
 
 // TODO 1: WiFi variables
 String wifiNetworkName = "CBU";
-String wifiPassword = "";
+String wifiPassword = "e969174f41509785bfde66d63dee09ae";
 
 // Time variables
 unsigned long lastTime = 0;
