@@ -9,11 +9,27 @@
 ////////////////////////////////////////////////////////////////////
 // TODO 3: Register for openweather account and get API key
 String urlOpenWeather = "https://api.openweathermap.org/data/2.5/weather?";
+String defaultZipCode = "93314";
+String zipcodeInput = "";
 String apiKey = "e969174f41509785bfde66d63dee09ae";
+enum screenState {NORMAL, ZIP_CODE};
+int screenWidth = M5.Lcd.width();
+int screenHeight = M5.Lcd.height();
+
+// Initialize variables
+static screenState currentState = NORMAL;
+static bool stateChangedThisLoop = false;
+int firstNumberWidth = screenWidth / 4;
+int numberHeight = screenHeight * .15;
+int num[5] = {0, 0, 0, 0, 0};
+int arraySize = 5;
+int arrowSize = 40;
+int spacing = 20;
+
 
 // TODO 1: WiFi variables
-String wifiNetworkName = "CBU";
-String wifiPassword = "e969174f41509785bfde66d63dee09ae";
+String wifiNetworkName = "CBU-LANCERS";
+String wifiPassword = "L@ncerN@tion";
 
 // Time variables
 unsigned long lastTime = 0;
@@ -38,7 +54,8 @@ String httpGETRequest(const char* serverName);
 void drawWeatherImage(String iconId, int resizeMult);
 void fetchWeatherDetails();
 void drawWeatherDisplay();
-
+void drawZipCodeDisplay();
+void handleTouch();
 ///////////////////////////////////////////////////////////////
 // Put your setup code here, to run once
 ///////////////////////////////////////////////////////////////
@@ -59,26 +76,58 @@ void setup() {
     }
     Serial.print("\n\nConnected to WiFi network with IP address: ");
     Serial.println(WiFi.localIP());
+    zipcodeInput = defaultZipCode;
 }
 
 ///////////////////////////////////////////////////////////////
 // Put your main code here, to run repeatedly
 ///////////////////////////////////////////////////////////////
 void loop() {
+    // Update the M5 device to register button press
+    M5.update();
+    
+    if (M5.BtnA.wasPressed()) {
+        Serial.println("Button A Pressed");
+        stateChangedThisLoop = true;
+        if (currentState == NORMAL && stateChangedThisLoop) {
+            currentState = ZIP_CODE;
+            lastTime = millis();
+            drawZipCodeDisplay();
+        } else {
+            zipcodeInput = "";
+            for (int i = 0; i < arraySize; i++) {
+                zipcodeInput += String(num[i]);
+            }
+            
+            Serial.printf("New zipcode: %d",zipcodeInput);
 
-    // Only execute every so often
-    if ((millis() - lastTime) > timerDelay) {
-        if (WiFi.status() == WL_CONNECTED) {
-
+            currentState = NORMAL;
             fetchWeatherDetails();
             drawWeatherDisplay();
-            
-        } else {
-            Serial.println("WiFi Disconnected");
         }
+        
+    }
+    handleTouch();
+    if (currentState == NORMAL)
+    {
 
-        // Update the last time to NOW
-        lastTime = millis();
+        // Only execute every so often
+        if ((millis() - lastTime) > timerDelay)
+        {
+            if (WiFi.status() == WL_CONNECTED)
+            {
+
+                fetchWeatherDetails();
+                drawWeatherDisplay();
+            }
+            else
+            {
+                Serial.println("WiFi Disconnected");
+            }
+
+            // Update the last time to NOW
+            lastTime = millis();
+        }
     }
 }
 
@@ -92,8 +141,9 @@ void fetchWeatherDetails() {
     // Hardcode the specific city,state,country into the query
     // Examples: https://api.openweathermap.org/data/2.5/weather?q=riverside,ca,usa&units=imperial&appid=YOUR_API_KEY
     //////////////////////////////////////////////////////////////////
-    String serverURL = urlOpenWeather + "q=des+moines,ia,usa&units=imperial&appid=" + apiKey;
-    //Serial.println(serverURL); // Debug print
+    String serverURL = urlOpenWeather + "zip=" + zipcodeInput +",US&units=imperial&appid=" + apiKey;
+    
+    Serial.println(serverURL); // Debug print
 
     //////////////////////////////////////////////////////////////////
     // Make GET request and store reponse
@@ -190,6 +240,55 @@ void drawWeatherDisplay() {
     M5.Lcd.setCursor(pad, M5.Lcd.getCursorY());
     M5.Lcd.setTextColor(primaryTextColor);
     M5.Lcd.printf("%s\n", cityName.c_str());
+}
+
+
+/////////////////////////////////////////////////////////////////
+// Draw the zip code display
+/////////////////////////////////////////////////////////////////
+void drawZipCodeDisplay() {
+    uint16_t primaryTextColor = TFT_WHITE;
+    M5.Lcd.fillScreen(TFT_BLUE); 
+    M5.Lcd.setTextColor(primaryTextColor);
+    M5.Lcd.setTextSize(20);
+    for (int i = 0; i < arraySize; i ++) {
+        int xpos = firstNumberWidth * i + firstNumberWidth / 2;
+        M5.Lcd.setCursor(xpos, numberHeight);
+        M5.Lcd.printf("^");
+        M5.Lcd.setCursor(xpos, numberHeight + 40);
+        M5.Lcd.printf("%d", num[i]);
+        M5.Lcd.setCursor(xpos, numberHeight + 90);
+        M5.Lcd.printf("v");
+        // firstNumberWidth += firstNumberWidth;
+    }
+    stateChangedThisLoop = false;
+}
+
+void handleTouch() {
+    if (M5.Touch.ispressed()) {
+        TouchPoint_t touch = M5.Touch.getPressPoint();
+
+        for (int i = 0; i < arraySize; i++) {
+            int xpos = firstNumberWidth * i;
+            int ypos = numberHeight;
+            if (touch.x > xpos && touch.x < xpos + firstNumberWidth && touch.y > ypos && touch.y < ypos + arrowSize) {
+                num[i] = (num[i] + 1) % 10;
+                delay(50);
+                drawZipCodeDisplay();
+                break;
+            }
+            ypos = numberHeight + 90;
+            if (touch.x > xpos && touch.x < xpos + firstNumberWidth && touch.y > ypos && touch.y < ypos + arrowSize) {
+                num[i] = (num[i] - 1) % 10;
+                if (num[i] < 0) {
+                    num[i] = 9;
+                }
+                drawZipCodeDisplay();
+                delay(50);
+                break;
+            }
+        }
+    }
 }
 
 /////////////////////////////////////////////////////////////////
