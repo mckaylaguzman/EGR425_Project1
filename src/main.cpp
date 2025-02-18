@@ -317,7 +317,47 @@ String httpGETRequest(const char* serverURL) {
     return response;
 }
 
-// Added missing drawWeatherImage function
 void drawWeatherImage(String iconId, int resizeMult) {
-    Serial.printf("Drawing weather icon: %s with scale %d\n", iconId.c_str(), resizeMult);
+
+    // Get the corresponding byte array
+    const uint16_t * weatherBitmap = getWeatherBitmap(iconId);
+
+    // Compute offsets so that the image is centered vertically and is
+    // right-aligned
+    int yOffset = -(resizeMult * imgSqDim - M5.Lcd.height()) / 2;
+    int xOffset = sWidth - (imgSqDim*resizeMult*.8); // Right align (image doesn't take up entire array)
+    //int xOffset = (M5.Lcd.width() / 2) - (imgSqDim * resizeMult / 2); // center horizontally
+    
+    // Iterate through each pixel of the imgSqDim x imgSqDim (100 x 100) array
+    for (int y = 0; y < imgSqDim; y++) {
+        for (int x = 0; x < imgSqDim; x++) {
+            // Compute the linear index in the array and get pixel value
+            int pixNum = (y * imgSqDim) + x;
+            uint16_t pixel = weatherBitmap[pixNum];
+
+            // If the pixel is black, do NOT draw (treat it as transparent);
+            // otherwise, draw the value
+            if (pixel != 0) {
+                // 16-bit RBG565 values give the high 5 pixels to red, the middle
+                // 6 pixels to green and the low 5 pixels to blue as described
+                // here: http://www.barth-dev.de/online/rgb565-color-picker/
+                byte red = (pixel >> 11) & 0b0000000000011111;
+                red = red << 3;
+                byte green = (pixel >> 5) & 0b0000000000111111;
+                green = green << 2;
+                byte blue = pixel & 0b0000000000011111;
+                blue = blue << 3;
+
+                // Scale image; for example, if resizeMult == 2, draw a 2x2
+                // filled square for each original pixel
+                for (int i = 0; i < resizeMult; i++) {
+                    for (int j = 0; j < resizeMult; j++) {
+                        int xDraw = x * resizeMult + i + xOffset;
+                        int yDraw = y * resizeMult + j + yOffset;
+                        M5.Lcd.drawPixel(xDraw, yDraw, M5.Lcd.color565(red, green, blue));
+                    }
+                }
+            }
+        }
+    }
 }
