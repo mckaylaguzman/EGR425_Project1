@@ -41,7 +41,7 @@ bool isFahrenheit = true;
 
 // WiFi UDP for time syncing
 WiFiUDP ntpUDP;
-NTPClient timeClient(ntpUDP, "pool.ntp.org", -21600, 60000); // ✅ Fixed missing semicolon!
+NTPClient timeClient(ntpUDP, "pool.ntp.org", -21600, 60000); 
 
 // Store last sync timestamp
 String lastSyncTime = "--:--:--";
@@ -215,10 +215,11 @@ void drawWeatherDisplay() {
     drawWeatherImage(strWeatherIcon, 3);
 
     // Padding for text display
-    int pad = 10;
+    int pad = 20;
     M5.Lcd.setCursor(pad, pad);
-    M5.Lcd.setTextColor(TFT_BLUE);
-    M5.Lcd.setTextSize(3);
+    M5.Lcd.setTextColor(primaryTextColor);
+    M5.Lcd.setTextSize(4);
+    M5.Lcd.printf("%s\n", cityName.c_str());
 
     // Convert temperatures if needed
     float tempNowDisplay = isFahrenheit ? tempNow : (tempNow - 32) * 5.0 / 9.0;
@@ -227,18 +228,18 @@ void drawWeatherDisplay() {
     String unit = isFahrenheit ? "F" : "C";
 
     // Display temperatures and city name
-    M5.Lcd.printf("LO:%0.1f%s\n", tempMinDisplay, unit.c_str());
     M5.Lcd.setCursor(pad, M5.Lcd.getCursorY());
     M5.Lcd.setTextColor(primaryTextColor);
-    M5.Lcd.setTextSize(10);
+    M5.Lcd.setTextSize(4);
     M5.Lcd.printf("%0.1f%s\n", tempNowDisplay, unit.c_str());
     M5.Lcd.setCursor(pad, M5.Lcd.getCursorY());
     M5.Lcd.setTextColor(TFT_RED);
     M5.Lcd.setTextSize(3);
     M5.Lcd.printf("HI:%0.1f%s\n", tempMaxDisplay, unit.c_str());
     M5.Lcd.setCursor(pad, M5.Lcd.getCursorY());
-    M5.Lcd.setTextColor(primaryTextColor);
-    M5.Lcd.printf("%s\n", cityName.c_str());
+    M5.Lcd.setTextColor(TFT_BLUE);
+     M5.Lcd.setTextSize(3);
+    M5.Lcd.printf("LO:%0.1f%s\n", tempMinDisplay, unit.c_str());
 
     // Show last sync timestamp at the bottom of the screen
     M5.Lcd.setCursor(10, sHeight - 30);
