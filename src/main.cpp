@@ -12,9 +12,23 @@
 
 // OpenWeather API variables
 String urlOpenWeather = "https://api.openweathermap.org/data/2.5/weather?";
-String apiKey = "e969174f41509785bfde66d63dee09ae";  // Replace with your own API key
+String apiKey = "e969174f41509785bfde66d63dee09ae";
+String defaultZipCode = "93314";
+String zipcodeInput = "";
+enum screenState {NORMAL, ZIP_CODE};
+int screenWidth = M5.Lcd.width();
+int screenHeight = M5.Lcd.height();
 
-// WiFi Credentials
+// Initialize variables
+static screenState currentState = NORMAL;
+static bool stateChangedThisLoop = false;
+int firstNumberWidth = screenWidth / 4;
+int numberHeight = screenHeight * .15;
+int num[5] = {0, 0, 0, 0, 0};
+int arraySize = 5;
+int arrowSize = 40;
+int spacing = 20;
+
 String wifiNetworkName = "CBU-LANCERS";
 String wifiPassword = "L@ncerN@tion";
 
@@ -49,7 +63,8 @@ String httpGETRequest(const char* serverName);
 void drawWeatherImage(String iconId, int resizeMult);
 void fetchWeatherDetails();
 void drawWeatherDisplay();
-
+void drawZipCodeDisplay();
+void handleTouch();
 ///////////////////////////////////////////////////////////////
 // Setup: Runs once at startup
 ///////////////////////////////////////////////////////////////
@@ -73,6 +88,8 @@ void setup() {
     // Initialize NTP time sync
     timeClient.begin();
     timeClient.update(); // Get initial time
+
+    zipcodeInput = defaultZipCode;
 }
 
 ///////////////////////////////////////////////////////////////
@@ -86,22 +103,49 @@ void loop() {
         isFahrenheit = !isFahrenheit;
         drawWeatherDisplay();
     }
-
-    // Reset back to F using Button B
-    // if (M5.BtnB.wasPressed()) {
-    //     isFahrenheit = true;
-    //     drawWeatherDisplay();
-    //     delay(300);
-    // }
-
-    if ((millis() - lastTime) > timerDelay) {
-        if (WiFi.status() == WL_CONNECTED) {
-            fetchWeatherDetails();  // Get new weather data
-            drawWeatherDisplay();   // Update the screen
+    
+    if (M5.BtnA.wasPressed()) {
+        Serial.println("Button A Pressed");
+        stateChangedThisLoop = true;
+        if (currentState == NORMAL && stateChangedThisLoop) {
+            currentState = ZIP_CODE;
+            lastTime = millis();
+            drawZipCodeDisplay();
         } else {
-            Serial.println("WiFi Disconnected");
+            zipcodeInput = "";
+            for (int i = 0; i < arraySize; i++) {
+                zipcodeInput += String(num[i]);
+            }
+            
+            Serial.printf("New zipcode: %d",zipcodeInput);
+
+            currentState = NORMAL;
+            fetchWeatherDetails();
+            drawWeatherDisplay();
         }
-        lastTime = millis(); // Update timer
+        
+    }
+    handleTouch();
+    if (currentState == NORMAL)
+    {
+
+        // Only execute every so often
+        if ((millis() - lastTime) > timerDelay)
+        {
+            if (WiFi.status() == WL_CONNECTED)
+            {
+
+                fetchWeatherDetails();
+                drawWeatherDisplay();
+            }
+            else
+            {
+                Serial.println("WiFi Disconnected");
+            }
+
+            // Update the last time to NOW
+            lastTime = millis();
+        }
     }
 }
 
@@ -109,8 +153,19 @@ void loop() {
 // Fetch weather details from OpenWeather API and update variables
 /////////////////////////////////////////////////////////////////
 void fetchWeatherDetails() {
-    // API request URL (fetches weather for Des Moines, IA)
-    String serverURL = urlOpenWeather + "q=des+moines,ia,usa&units=imperial&appid=" + apiKey;
+    //////////////////////////////////////////////////////////////////
+    // Hardcode the specific city,state,country into the query
+    // Examples: https://api.openweathermap.org/data/2.5/weather?q=riverside,ca,usa&units=imperial&appid=YOUR_API_KEY
+    //////////////////////////////////////////////////////////////////
+    String serverURL = urlOpenWeather + "zip=" + zipcodeInput +",US&units=imperial&appid=" + apiKey;
+    
+    Serial.println(serverURL); // Debug print
+
+    //////////////////////////////////////////////////////////////////
+    // Make GET request and store reponse
+    //////////////////////////////////////////////////////////////////
+    String response = httpGETRequest(serverURL.c_str());
+    //Serial.print(response); // Debug print
     
     // Perform HTTP GET request
     String response = httpGETRequest(serverURL.c_str());
@@ -194,6 +249,55 @@ void drawWeatherDisplay() {
     M5.Lcd.setTextColor(TFT_YELLOW);
     M5.Lcd.setTextSize(2);
     M5.Lcd.printf("Last Sync: %s", lastSyncTime.c_str());
+}
+
+
+/////////////////////////////////////////////////////////////////
+// Draw the zip code display
+/////////////////////////////////////////////////////////////////
+void drawZipCodeDisplay() {
+    uint16_t primaryTextColor = TFT_WHITE;
+    M5.Lcd.fillScreen(TFT_BLUE); 
+    M5.Lcd.setTextColor(primaryTextColor);
+    M5.Lcd.setTextSize(20);
+    for (int i = 0; i < arraySize; i ++) {
+        int xpos = firstNumberWidth * i + firstNumberWidth / 2;
+        M5.Lcd.setCursor(xpos, numberHeight);
+        M5.Lcd.printf("^");
+        M5.Lcd.setCursor(xpos, numberHeight + 40);
+        M5.Lcd.printf("%d", num[i]);
+        M5.Lcd.setCursor(xpos, numberHeight + 90);
+        M5.Lcd.printf("v");
+        // firstNumberWidth += firstNumberWidth;
+    }
+    stateChangedThisLoop = false;
+}
+
+void handleTouch() {
+    if (M5.Touch.ispressed()) {
+        TouchPoint_t touch = M5.Touch.getPressPoint();
+
+        for (int i = 0; i < arraySize; i++) {
+            int xpos = firstNumberWidth * i;
+            int ypos = numberHeight;
+            if (touch.x > xpos && touch.x < xpos + firstNumberWidth && touch.y > ypos && touch.y < ypos + arrowSize) {
+                num[i] = (num[i] + 1) % 10;
+                delay(50);
+                drawZipCodeDisplay();
+                break;
+            }
+            ypos = numberHeight + 90;
+            if (touch.x > xpos && touch.x < xpos + firstNumberWidth && touch.y > ypos && touch.y < ypos + arrowSize) {
+                num[i] = (num[i] - 1) % 10;
+                if (num[i] < 0) {
+                    num[i] = 9;
+                }
+                drawZipCodeDisplay();
+                delay(50);
+                break;
+            }
+        }
+    }
 }
 
 /////////////////////////////////////////////////////////////////
