@@ -1,4 +1,4 @@
-#include <M5Unified.h>
+#include <M5Core2.h>
 #include <ArduinoJson.h>
 #include <HTTPClient.h>
 #include <WiFiUdp.h>  // Required for NTPClient
@@ -166,10 +166,6 @@ void fetchWeatherDetails() {
     //////////////////////////////////////////////////////////////////
     String response = httpGETRequest(serverURL.c_str());
     //Serial.print(response); // Debug print
-    
-    // Perform HTTP GET request
-    String response = httpGETRequest(serverURL.c_str());
-
     // Allocate JSON buffer for parsing response
     const size_t jsonCapacity = 768 + 250;
     DynamicJsonDocument objResponse(jsonCapacity);
@@ -197,7 +193,7 @@ void fetchWeatherDetails() {
 
     Serial.printf("NOW: %.1f F and %s\tMIN: %.1f F\tMAX: %.1f F\n", tempNow, strWeatherDesc, tempMin, tempMax);
 
-    // ✅ Get updated time from NTP
+    // Get updated time from NTP
     timeClient.update();
     lastSyncTime = timeClient.getFormattedTime();
 }
