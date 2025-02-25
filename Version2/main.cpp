@@ -3,7 +3,7 @@
 #include <HTTPClient.h>
 #include <WiFiUdp.h>  // Required for NTPClient
 #include <NTPClient.h> // NTP time sync
-#include "EGR425_Phase1_weather_bitmap_images.h"
+#include "EGR425_Phase1_weather_bitmap_images copy.h"
 #include <WiFi.h>
 
 ////////////////////////////////////////////////////////////////////

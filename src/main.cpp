@@ -5,7 +5,20 @@
 #include <NTPClient.h> // NTP time sync
 #include "EGR425_Phase1_weather_bitmap_images.h"
 #include <WiFi.h>
+#include "../include/I2C_RW.h"
 
+
+///////////////////////////////////////////////////////////////
+// Register defines
+///////////////////////////////////////////////////////////////
+#define VCNL_I2C_ADDRESS 0x60
+#define VCNL_REG_PROX_DATA 0x08
+#define VCNL_REG_ALS_DATA 0x09
+#define VCNL_REG_WHITE_DATA 0x0A
+
+#define VCNL_REG_PS_CONFIG 0x03
+#define VCNL_REG_ALS_CONFIG 0x00
+#define VCNL_REG_WHITE_CONFIG 0x04
 
 /////////////////////////////////////////////
 // OpenWeather API variables
@@ -30,13 +43,19 @@ int arraySize = 5;
 int arrowSize = 40;
 int spacing = 20;
 
+/////////////////////////////////////////////
+// Variables for version 3 
+/////////////////////////////////////////////
+int const PIN_SDA = 32;
+int const PIN_SCL = 33;
+
 String wifiNetworkName = "CBU-LANCERS";
 String wifiPassword = "L@ncerN@tion";
 /////////////////////////////////////////////
 // Timer variables
 /////////////////////////////////////////////
 unsigned long lastTime = 0;
-unsigned long timerDelay = 5000;  // Refresh weather every 5 seconds
+unsigned long timerDelay = 10000;  // Refresh weather every 5 seconds
 
 /////////////////////////////////////////////
 // Temperature mode (Fahrenheit or Celsius)
@@ -79,12 +98,25 @@ void fetchWeatherDetails();
 void drawWeatherDisplay();
 void drawZipCodeDisplay();
 void handleTouch();
+void getRoomHumidityAndTemp();
+void getAbmientLightAndProximity();
+void changeLCDProperties(int prox, int als);
 
 ///////////////////////////////////////////////////////////////
 // Setup: Runs once at startup
 ///////////////////////////////////////////////////////////////
 void setup() {
     M5.begin();
+
+    // Initialize I2C
+    I2C_RW::initI2C(VCNL_I2C_ADDRESS, 400000, PIN_SDA, PIN_SCL);
+    delay(1000);
+    //I2C_RW::scanI2cLinesForAddresses(true);
+
+    // Write registers to initialize/enable VCNL sensors
+    I2C_RW::writeReg8Addr16DataWithProof(VCNL_REG_PS_CONFIG, 2, 0x0800, " to enable proximity sensor", true);
+    I2C_RW::writeReg8Addr16DataWithProof(VCNL_REG_ALS_CONFIG, 2, 0x0000, " to enable ambient light sensor", true);
+    I2C_RW::writeReg8Addr16DataWithProof(VCNL_REG_WHITE_CONFIG, 2, 0x0000, " to enable raw white light sensor", true);
     
     // Get screen width and height
     sWidth = M5.Lcd.width();
@@ -105,6 +137,8 @@ void setup() {
     timeClient.update(); // Get initial time
 
     zipcodeInput = defaultZipCode;
+
+    
 }
 
 ///////////////////////////////////////////////////////////////
@@ -162,12 +196,15 @@ void loop() {
             lastTime = millis();
         }
     }
+    getAbmientLightAndProximity();
+
 }
 
 /////////////////////////////////////////////////////////////////
 // Fetch weather details from OpenWeather API and update variables
 /////////////////////////////////////////////////////////////////
 void fetchWeatherDetails() {
+
     //////////////////////////////////////////////////////////////////
     // Hardcode the specific city,state,country into the query
     // Examples: https://api.openweathermap.org/data/2.5/weather?q=riverside,ca,usa&units=imperial&appid=YOUR_API_KEY
@@ -253,7 +290,7 @@ void drawWeatherDisplay() {
     M5.Lcd.printf("HI:%0.1f%s\n", tempMaxDisplay, unit.c_str());
     M5.Lcd.setCursor(pad, M5.Lcd.getCursorY());
     M5.Lcd.setTextColor(TFT_BLUE);
-     M5.Lcd.setTextSize(3);
+    M5.Lcd.setTextSize(3);
     M5.Lcd.printf("LO:%0.1f%s\n", tempMinDisplay, unit.c_str());
 
     // Show last sync timestamp at the bottom of the screen
@@ -280,7 +317,6 @@ void drawZipCodeDisplay() {
         M5.Lcd.printf("%d", num[i]);
         M5.Lcd.setCursor(xpos, numberHeight + 90);
         M5.Lcd.printf("v");
-        // firstNumberWidth += firstNumberWidth;
     }
     stateChangedThisLoop = false;
 }
@@ -376,4 +412,47 @@ void drawWeatherImage(String iconId, int resizeMult) {
             }
         }
     }
+}
+
+void getRoomHumidityAndTemp() {
+
+}
+
+///////////////////////////////////////////////////////////////
+// Get ambient light and proximity data
+///////////////////////////////////////////////////////////////
+void getAbmientLightAndProximity() {
+    // Read proximity data
+    int prox = I2C_RW::readReg8Addr16Data(VCNL_REG_PROX_DATA, 2, "to read proximity data", false);
+    Serial.printf("Proximity: %d\n", prox);
+    
+    // Read ambient light data
+    int als = I2C_RW::readReg8Addr16Data(VCNL_REG_ALS_DATA, 2, "to read ambient light data", false);
+    als = als * 0.1; // See pg 12 of datasheet - we are using ALS_IT (7:6)=(0,0)=80ms integration time = 0.10 lux/step for a max range of 6553.5 lux
+    Serial.printf("Ambient Light: %d\n", als);
+
+    changeLCDProperties(prox, als);
+
+}
+
+void changeLCDProperties(int prox, int als) {
+    
+    // change brightness based off of ambient light
+    if (als > 300) {
+        M5.Axp.SetLcdVoltage(2900);
+    } else if (als <= 300 && als > 150) {
+        M5.Axp.SetLcdVoltage(2800);
+    } else if (als <= 150) {
+        M5.Axp.SetLcdVoltage(2700);
+    }
+
+    // Change brightness based off of proximity
+    if (prox > 150) {
+        uint8_t brightness = 1;
+        M5.Lcd.sleep();
+    } else {
+        uint8_t brightness = 255;
+        M5.Lcd.wakeup();
+    } 
+    
 }
