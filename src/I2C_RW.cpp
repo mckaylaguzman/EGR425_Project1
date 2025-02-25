@@ -40,7 +40,7 @@ void I2C_RW::scanI2cLinesForAddresses(bool verboseConnectionFailures) {
         Wire.beginTransmission(address);
         error = Wire.endTransmission();
         if (error == 0) {
-            // Serial.printf("\tSTATUS: I2C device found at address 0x%02X\n", address);
+            Serial.printf("\tSTATUS: I2C device found at address 0x%02X\n", address);
             addressesFound[address] = true;
             nDevices++;
         } else if (verboseConnectionFailures) {

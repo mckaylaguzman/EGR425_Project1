@@ -9,12 +9,17 @@
 
 
 ///////////////////////////////////////////////////////////////
-// Register defines
+// Register defines VCNL4040
 ///////////////////////////////////////////////////////////////
 #define VCNL_I2C_ADDRESS 0x60
 #define VCNL_REG_PROX_DATA 0x08
 #define VCNL_REG_ALS_DATA 0x09
 #define VCNL_REG_WHITE_DATA 0x0A
+///////////////////////////////////////////////////////////////
+// Register defines SHT40
+///////////////////////////////////////////////////////////////
+#define SHT40_ADDRESS 0X44
+#define SHT40_REG_MEASURE_HIGH_REPEATABILITY 0xFD
 
 #define VCNL_REG_PS_CONFIG 0x03
 #define VCNL_REG_ALS_CONFIG 0x00
@@ -27,7 +32,7 @@ String urlOpenWeather = "https://api.openweathermap.org/data/2.5/weather?";
 String apiKey = "e969174f41509785bfde66d63dee09ae";
 String defaultZipCode = "93314";
 String zipcodeInput = "";
-enum screenState {NORMAL, ZIP_CODE};
+enum screenState {NORMAL, ZIP_CODE, LOCAL_WEATHER};
 int screenWidth = M5.Lcd.width();
 int screenHeight = M5.Lcd.height();
 
@@ -88,6 +93,8 @@ String cityName;
 double tempNow;
 double tempMin;
 double tempMax;
+float humidity;
+float localTempNow;
 
 /////////////////////////////////////////////
 // Function declarations
@@ -101,14 +108,15 @@ void handleTouch();
 void getRoomHumidityAndTemp();
 void getAbmientLightAndProximity();
 void changeLCDProperties(int prox, int als);
-
+void drawLocalWeatherDisplay();
+void fetchLocalWeatherDetail();
+void updateLocalWeatherDisplay();
 ///////////////////////////////////////////////////////////////
 // Setup: Runs once at startup
 ///////////////////////////////////////////////////////////////
 void setup() {
     M5.begin();
 
-    // Initialize I2C
     I2C_RW::initI2C(VCNL_I2C_ADDRESS, 400000, PIN_SDA, PIN_SCL);
     delay(1000);
     //I2C_RW::scanI2cLinesForAddresses(true);
@@ -148,9 +156,15 @@ void loop() {
     M5.update();
 
     // To go from F to C using Button C
-    if (M5.BtnC.wasPressed()) {  
+    if (M5.BtnC.wasPressed() && currentState == NORMAL) {  
         isFahrenheit = !isFahrenheit;
         drawWeatherDisplay();
+    }
+
+    if (M5.BtnB.wasPressed()) {
+        currentState = LOCAL_WEATHER;
+        drawLocalWeatherDisplay();
+        
     }
     
     if (M5.BtnA.wasPressed()) {
@@ -160,6 +174,11 @@ void loop() {
             currentState = ZIP_CODE;
             lastTime = millis();
             drawZipCodeDisplay();
+        } else if (currentState == LOCAL_WEATHER && stateChangedThisLoop) {
+            currentState = NORMAL;
+            zipcodeInput = defaultZipCode;
+            drawWeatherDisplay();
+
         } else {
             zipcodeInput = "";
             for (int i = 0; i < arraySize; i++) {
@@ -194,6 +213,10 @@ void loop() {
 
             // Update the last time to NOW
             lastTime = millis();
+        }
+    } else if (currentState == LOCAL_WEATHER) {
+        if ((millis() - lastTime) > timerDelay) {
+            fetchLocalWeatherDetail();
         }
     }
     getAbmientLightAndProximity();
@@ -422,17 +445,35 @@ void getRoomHumidityAndTemp() {
 // Get ambient light and proximity data
 ///////////////////////////////////////////////////////////////
 void getAbmientLightAndProximity() {
+    // Initialize I2C
+    I2C_RW::initI2C(VCNL_I2C_ADDRESS, 400000, PIN_SDA, PIN_SCL);
     // Read proximity data
     int prox = I2C_RW::readReg8Addr16Data(VCNL_REG_PROX_DATA, 2, "to read proximity data", false);
-    Serial.printf("Proximity: %d\n", prox);
+    
     
     // Read ambient light data
     int als = I2C_RW::readReg8Addr16Data(VCNL_REG_ALS_DATA, 2, "to read ambient light data", false);
     als = als * 0.1; // See pg 12 of datasheet - we are using ALS_IT (7:6)=(0,0)=80ms integration time = 0.10 lux/step for a max range of 6553.5 lux
-    Serial.printf("Ambient Light: %d\n", als);
+    
 
     changeLCDProperties(prox, als);
 
+}
+
+
+void drawLocalWeatherDisplay() {
+    M5.Lcd.fillScreen(TFT_BLUE);
+    M5.Lcd.setCursor(10, 10);
+    M5.Lcd.setTextColor(TFT_WHITE);
+    M5.Lcd.setTextSize(3);
+    M5.Lcd.printf("Local Temperature and Humidity\n");
+    M5.Lcd.setTextSize(2);
+    M5.Lcd.setCursor(10, 50);
+    M5.Lcd.printf("Temp: %.2f C\n", localTempNow);
+    M5.Lcd.setCursor(10, 100);
+    M5.Lcd.printf("Humidity: %.2f %\n", humidity);
+
+    fetchLocalWeatherDetail();
 }
 
 void changeLCDProperties(int prox, int als) {
@@ -455,4 +496,53 @@ void changeLCDProperties(int prox, int als) {
         M5.Lcd.wakeup();
     } 
     
+}
+
+void fetchLocalWeatherDetail() {
+    I2C_RW::initI2C(SHT40_ADDRESS, 400000, PIN_SDA, PIN_SCL);
+
+    I2C_RW::writeReg8Addr16Data(SHT40_REG_MEASURE_HIGH_REPEATABILITY, 0, "to get local temperature", false);
+    delay(100);
+    
+    // Step 2: Read 6 bytes of data from the sensor
+    uint8_t rx_bytes[6];
+    Wire.requestFrom(SHT40_ADDRESS, 6);
+    for (int i = 0; i < 6; i++) {
+        if (Wire.available()) {
+            rx_bytes[i] = Wire.read(); // Read each byte
+        }
+    }
+
+    // Step 3: Process the received data
+    int t_ticks = (rx_bytes[0] << 8) + rx_bytes[1]; // Combine MSB and LSB for temperature
+    int rh_ticks = (rx_bytes[3] << 8) + rx_bytes[4]; // Combine MSB and LSB for humidity
+
+    // Calculate temperature in degrees Celsius
+    float t_degC = -45 + 175.0 * t_ticks / 65535.0;
+    // localTempNow = (t_degC * (9/5)) + 32;
+    localTempNow = t_degC;
+
+    // Calculate relative humidity percentage
+    float rh_pRH = -6 + 125.0 * rh_ticks / 65535.0;
+    humidity = constrain(rh_pRH, 0.0f, 100.0f); // Ensure humidity is within bounds
+
+    //Step 4: Print results to Serial
+    Serial.printf("Temperature: %.2f °C\n", localTempNow);
+    Serial.printf("Humidity: %.2f %%\n", humidity);
+
+    updateLocalWeatherDisplay();
+    
+}
+
+void updateLocalWeatherDisplay() {
+    M5.Lcd.fillScreen(TFT_BLUE);
+    M5.Lcd.setCursor(10, 10);
+    M5.Lcd.setTextColor(TFT_WHITE);
+    M5.Lcd.setTextSize(3);
+    M5.Lcd.printf("Local Temperature and Humidity\n");
+    M5.Lcd.setTextSize(2);
+    M5.Lcd.setCursor(10, 100);
+    M5.Lcd.printf("Temp: %.2f C\n", localTempNow);
+    M5.Lcd.setCursor(10, 150);
+    M5.Lcd.printf("Humidity: %.2f %\n", humidity);
 }
