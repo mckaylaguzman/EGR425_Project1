@@ -156,8 +156,9 @@ void loop() {
     M5.update();
 
     // To go from F to C using Button C
-    if (M5.BtnC.wasPressed() && currentState == NORMAL) {  
+    if (M5.BtnC.wasPressed()) {  
         isFahrenheit = !isFahrenheit;
+        Serial.printf("Temperature unit changed: %s\n", isFahrenheit ? "Fahrenheit" : "Celsius");
         drawWeatherDisplay();
     }
 
@@ -315,6 +316,10 @@ void drawWeatherDisplay() {
     M5.Lcd.setTextColor(TFT_BLUE);
     M5.Lcd.setTextSize(3);
     M5.Lcd.printf("LO:%0.1f%s\n", tempMinDisplay, unit.c_str());
+    M5.Lcd.setCursor(10, sHeight - 30);
+    M5.Lcd.setTextColor(TFT_YELLOW);
+    M5.Lcd.setTextSize(2);
+    M5.Lcd.printf("Last Sync: %s", lastSyncTime.c_str());
 
     // Show last sync timestamp at the bottom of the screen
     M5.Lcd.setCursor(10, sHeight - 30);
