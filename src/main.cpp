@@ -108,9 +108,10 @@ void handleTouch();
 void getRoomHumidityAndTemp();
 void getAbmientLightAndProximity();
 void changeLCDProperties(int prox, int als);
-void drawLocalWeatherDisplay();
-void fetchLocalWeatherDetail();
-void updateLocalWeatherDisplay();
+void drawLocalWeatherDisplay(bool isFahrenheit);
+void fetchLocalWeatherDetail(bool isFahrenheit);
+void updateLocalWeatherDisplay(bool isFarenheit);
+
 ///////////////////////////////////////////////////////////////
 // Setup: Runs once at startup
 ///////////////////////////////////////////////////////////////
@@ -164,7 +165,15 @@ void loop() {
 
     if (M5.BtnB.wasPressed()) {
         currentState = LOCAL_WEATHER;
-        drawLocalWeatherDisplay();
+        if (currentState == LOCAL_WEATHER) {
+            if (isFahrenheit) {
+                isFahrenheit = false;
+            } else {
+                isFahrenheit = true;
+            }
+        }
+        drawLocalWeatherDisplay(isFahrenheit);
+
         
     }
     
@@ -217,7 +226,7 @@ void loop() {
         }
     } else if (currentState == LOCAL_WEATHER) {
         if ((millis() - lastTime) > timerDelay) {
-            fetchLocalWeatherDetail();
+            fetchLocalWeatherDetail(isFahrenheit);
         }
     }
     getAbmientLightAndProximity();
@@ -466,19 +475,23 @@ void getAbmientLightAndProximity() {
 }
 
 
-void drawLocalWeatherDisplay() {
+void drawLocalWeatherDisplay(bool isFahrenheit) {
     M5.Lcd.fillScreen(TFT_BLUE);
     M5.Lcd.setCursor(10, 10);
     M5.Lcd.setTextColor(TFT_WHITE);
     M5.Lcd.setTextSize(3);
     M5.Lcd.printf("Local Temperature and Humidity\n");
     M5.Lcd.setTextSize(2);
-    M5.Lcd.setCursor(10, 50);
-    M5.Lcd.printf("Temp: %.2f C\n", localTempNow);
     M5.Lcd.setCursor(10, 100);
+    if (isFahrenheit) {
+        M5.Lcd.printf("Temp: %.2f F\n", localTempNow);
+    } else {
+        M5.Lcd.printf("Temp: %.2f C\n", localTempNow);
+    }
+    M5.Lcd.setCursor(10, 150);
     M5.Lcd.printf("Humidity: %.2f %\n", humidity);
 
-    fetchLocalWeatherDetail();
+    fetchLocalWeatherDetail(isFahrenheit);
 }
 
 void changeLCDProperties(int prox, int als) {
@@ -503,7 +516,7 @@ void changeLCDProperties(int prox, int als) {
     
 }
 
-void fetchLocalWeatherDetail() {
+void fetchLocalWeatherDetail(bool isFahrenheit) {
     I2C_RW::initI2C(SHT40_ADDRESS, 400000, PIN_SDA, PIN_SCL);
 
     I2C_RW::writeReg8Addr16Data(SHT40_REG_MEASURE_HIGH_REPEATABILITY, 0, "to get local temperature", false);
@@ -523,23 +536,30 @@ void fetchLocalWeatherDetail() {
     int rh_ticks = (rx_bytes[3] << 8) + rx_bytes[4]; // Combine MSB and LSB for humidity
 
     // Calculate temperature in degrees Celsius
-    float t_degC = -45 + 175.0 * t_ticks / 65535.0;
-    // localTempNow = (t_degC * (9/5)) + 32;
-    localTempNow = t_degC;
+    if (isFahrenheit) {
+        float t_degC = -45 + 175.0 * t_ticks / 65535.0;
+        localTempNow = (t_degC * (9/5)) + 32;
+        Serial.printf("Temperature: %.2f °F\n", localTempNow);
+    } else {
+        float t_degC = -45 + 175.0 * t_ticks / 65535.0;
+        localTempNow = t_degC;
+        Serial.printf("Temperature: %.2f °C\n", localTempNow);
+    }
+    
 
     // Calculate relative humidity percentage
     float rh_pRH = -6 + 125.0 * rh_ticks / 65535.0;
     humidity = constrain(rh_pRH, 0.0f, 100.0f); // Ensure humidity is within bounds
 
     //Step 4: Print results to Serial
-    Serial.printf("Temperature: %.2f °C\n", localTempNow);
+    
     Serial.printf("Humidity: %.2f %%\n", humidity);
 
-    updateLocalWeatherDisplay();
+    updateLocalWeatherDisplay(isFahrenheit);
     
 }
 
-void updateLocalWeatherDisplay() {
+void updateLocalWeatherDisplay(bool isFarenheit) {
     M5.Lcd.fillScreen(TFT_BLUE);
     M5.Lcd.setCursor(10, 10);
     M5.Lcd.setTextColor(TFT_WHITE);
@@ -547,7 +567,11 @@ void updateLocalWeatherDisplay() {
     M5.Lcd.printf("Local Temperature and Humidity\n");
     M5.Lcd.setTextSize(2);
     M5.Lcd.setCursor(10, 100);
-    M5.Lcd.printf("Temp: %.2f C\n", localTempNow);
+    if (isFahrenheit) {
+        M5.Lcd.printf("Temp: %.2f F\n", localTempNow);
+    } else {
+        M5.Lcd.printf("Temp: %.2f C\n", localTempNow);
+    }
     M5.Lcd.setCursor(10, 150);
     M5.Lcd.printf("Humidity: %.2f %\n", humidity);
 }
