@@ -574,4 +574,6 @@ void updateLocalWeatherDisplay(bool isFarenheit) {
     }
     M5.Lcd.setCursor(10, 150);
     M5.Lcd.printf("Humidity: %.2f %\n", humidity);
+    M5.Lcd.setCursor(10, 200);
+    M5.Lcd.printf("Last Sync: %s", lastSyncTime.c_str());
 }
