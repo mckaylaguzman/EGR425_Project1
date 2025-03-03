@@ -517,12 +517,13 @@ void changeLCDProperties(int prox, int als) {
 }
 
 void fetchLocalWeatherDetail(bool isFahrenheit) {
+    //init 
     I2C_RW::initI2C(SHT40_ADDRESS, 400000, PIN_SDA, PIN_SCL);
 
     I2C_RW::writeReg8Addr16Data(SHT40_REG_MEASURE_HIGH_REPEATABILITY, 0, "to get local temperature", false);
     delay(100);
     
-    // Step 2: Read 6 bytes of data from the sensor
+    // Read the data
     uint8_t rx_bytes[6];
     Wire.requestFrom(SHT40_ADDRESS, 6);
     for (int i = 0; i < 6; i++) {
@@ -531,7 +532,7 @@ void fetchLocalWeatherDetail(bool isFahrenheit) {
         }
     }
 
-    // Step 3: Process the received data
+    // Processing the recieved data
     int t_ticks = (rx_bytes[0] << 8) + rx_bytes[1]; // Combine MSB and LSB for temperature
     int rh_ticks = (rx_bytes[3] << 8) + rx_bytes[4]; // Combine MSB and LSB for humidity
 
@@ -551,7 +552,6 @@ void fetchLocalWeatherDetail(bool isFahrenheit) {
     float rh_pRH = -6 + 125.0 * rh_ticks / 65535.0;
     humidity = constrain(rh_pRH, 0.0f, 100.0f); // Ensure humidity is within bounds
 
-    //Step 4: Print results to Serial
     
     Serial.printf("Humidity: %.2f %%\n", humidity);
 
@@ -574,6 +574,11 @@ void updateLocalWeatherDisplay(bool isFarenheit) {
     }
     M5.Lcd.setCursor(10, 150);
     M5.Lcd.printf("Humidity: %.2f %\n", humidity);
+    
+    //update time lasy synced
+    timeClient.update();
+    lastSyncTime = timeClient.getFormattedTime();
+
     M5.Lcd.setCursor(10, 200);
     M5.Lcd.printf("Last Sync: %s", lastSyncTime.c_str());
 }
